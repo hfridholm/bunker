@@ -10,6 +10,7 @@
 #include <argp.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "file.h"
 
@@ -634,15 +635,18 @@ static int address_and_port_get(char** address, int* port, const char* string)
 /*
  *
  */
-static void join_routine()
+static void join_routine(void)
 {
-  if(args.arg_count < 2)
-  {
-    printf("No room inputted\n");
-    return;
-  }
+  char* server;
 
-  char* server = args.args[1];
+  if(args.arg_count >= 2)
+  {
+    server = strdup(args.args[1]);
+  }
+  else
+  {
+    server = getstr("Room: ");
+  }
 
   printf("Room: %s\n", server);
 
@@ -651,10 +655,14 @@ static void join_routine()
 
   if(address_and_port_get(&address, &port, server) == 0)
   {
+    free(server);
+
     printf("bunker: No room was found\n");
 
     return;
   }
+
+  free(server);
 
   printf("Address: %s\n", address);
   printf("Port: %d\n", port);
@@ -696,7 +704,7 @@ static void join_routine()
 /*
  *
  */
-static void list_routine()
+static void list_routine(void)
 {
   // 1. Get all registered rooms
   room_t* rooms;
@@ -720,67 +728,73 @@ static void list_routine()
 /*
  *
  */
-static void add_routine()
+static void add_routine(void)
 {
-  if(args.arg_count < 3)
-  {
-    fprintf(stderr, "Not enough arguments\n");
+  // 1. Input room name
+  char* room;
 
-    return;
+  if(args.arg_count >= 2)
+  {
+    room = strdup(args.args[1]);
+  }
+  else
+  {
+    room = getstr("Name: ");
   }
 
-  char* server = args.args[2];
+  // 2. Input address and port (server)
+  char* server;
 
+  if(args.arg_count >= 3)
+  {
+    server = strdup(args.args[2]);
+  }
+  else
+  {
+    server = getstr("Server: ");
+  }
+
+
+  // 3. Split address and port
   char* address;
   int   port;
 
-  if(address_and_port_get(&address, &port, server) == 0)
+  if(address_and_port_split(&address, &port, server) != 0)
   {
+    free(server);
+    free(room);
+
     fprintf(stderr, "Failed to parse address and port\n");
 
     return;
   }
+  
+  free(server);
 
-  printf("Address: %s\n", address);
-  printf("Port: %d\n", port);
-
-  // 2. Create room to store
-  room_t room = room_create(args.args[1], address, port);
+  address_and_port_add(address, port, room);
 
   free(address);
 
-
-  // 1. Get all registered rooms
-  room_t* rooms;
-  size_t  count;
-
-  if(rooms_load(&rooms, &count) != 0)
-  {
-    return;
-  }
-
-  room_add(&rooms, &count, room);
-
-
-  room_free(room);
-
-  rooms_save(rooms, count);
-  
-  rooms_free(&rooms, count);
+  free(room);
 }
 
 /*
  *
  */
-static void del_routine()
+static void del_routine(void)
 {
-  if(args.arg_count < 2)
+  // 1. Input room name
+  char* room;
+
+  if(args.arg_count >= 2)
   {
-    printf("No room inputted\n");
-    return;
+    room = strdup(args.args[1]);
+  }
+  else
+  {
+    room = getstr("Name: ");
   }
 
-  char* room = args.args[1];
 
   // 1. Get all registered rooms
   room_t* rooms;
@@ -788,13 +802,15 @@ static void del_routine()
 
   if(rooms_load(&rooms, &count) != 0)
   {
+    free(room);
+
     return;
   }
 
-  printf("count before: %ld\n", count);
-
   if(room_del(&rooms, &count, room) != 0)
   {
+    free(room);
+
     rooms_free(&rooms, count);
 
     fprintf(stderr, "Failed to del room\n");
@@ -802,9 +818,9 @@ static void del_routine()
     return;
   }
 
-  printf("count after: %ld\n", count);
+  printf("bunker: Deleted room: %s\n", room);
 
-  printf("Deleted room: %s\n", room);
+  free(room);
 
   rooms_save(rooms, count);
   
@@ -820,30 +836,30 @@ int main(int argc, char* argv[])
 {
   argp_parse(&argp, argc, argv, 0, 0, &args);
 
-  if(args.arg_count > 0)
-  {
-    char* command = args.args[0];
+  srand(time(NULL));
 
-    if(strcmp(command, "join") == 0)
-    {
-      join_routine();
-    }
-    else if(strcmp(command, "list") == 0)
-    {
-      list_routine();
-    }
-    else if(strcmp(command, "del") == 0)
-    {
-      del_routine();
-    }
-    else if(strcmp(command, "add") == 0)
-    {
-      add_routine();
-    }
-    else
-    {
-      printf("This is a bunker\n");
-    }
+
+  char* command = args.args[0];
+
+  if(strcmp(command, "join") == 0)
+  {
+    join_routine();
+  }
+  else if(strcmp(command, "list") == 0)
+  {
+    list_routine();
+  }
+  else if(strcmp(command, "del") == 0)
+  {
+    del_routine();
+  }
+  else if(strcmp(command, "add") == 0)
+  {
+    add_routine();
+  }
+  else
+  {
+    printf("bunker: Unknown command '%s'\n", command);
   }
 
   free(args.args);
