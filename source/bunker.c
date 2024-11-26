@@ -262,9 +262,60 @@ static int rooms_get(room_t** rooms, size_t* count)
 /*
  *
  */
-static int room_line_get(char* line, room_t room)
+static int room_line_create(char** line, room_t room)
 {
-  sprintf(line, "%s, %s:%d", room.name, room.address, room.port)
+  if(!line) return 1;
+
+  if(!room.name || !room.address) return 1;
+
+  char buffer[256];
+
+  if(sprintf(buffer, "%s,%s:%d", room.name, room.address, room.port) < 0)
+  {
+    return 2;
+  }
+
+  *line = strdup(buffer);
+
+  return 0;
+}
+
+/*
+ *
+ */
+static int room_lines_create(char*** lines, room_t* rooms, size_t count)
+{
+  *lines = malloc(sizeof(char*) * count);
+
+  if(!(*lines))
+  {
+    return 1;
+  }
+
+  for(size_t index = 0; index < count; index++)
+  {
+    if(room_line_create(*lines + index, rooms[index]) != 0)
+    {
+      return 2;
+    }
+  }
+
+  return 0;
+}
+
+/*
+ *
+ */
+static void room_lines_free(char*** lines, size_t count)
+{
+  if(!lines) return;
+
+  for(size_t index = 0; index < count; index++)
+  {
+    free((*lines)[index]);
+  }
+
+  free(*lines);
 }
 
 /*
@@ -272,13 +323,56 @@ static int room_line_get(char* line, room_t room)
  */
 static int rooms_store(room_t* rooms, size_t count)
 {
-  char** lines = malloc(sizeof(char*) * count);
+  char** lines;
+
+  if(room_lines_create(&lines, rooms, count) != 0)
+  {
+    return 2;
+  }
+
+  char* buffer = NULL;
+  size_t buffer_length = 0;
 
   for(size_t index = 0; index < count; index++)
   {
-    
+    char* line = lines[index];
+
+    size_t line_length = strlen(line);
+
+    buffer = realloc(buffer, sizeof(char) * (buffer_length + line_length + 2));
+
+    if(!buffer)
+    {
+      fprintf(stderr, "Failed to realloc buffer\n");
+
+      break;
+    }
+
+    if(sprintf(buffer + buffer_length, "%s\n", line) < 0)
+    {
+      fprintf(stderr, "Failed to sprintf buffer\n");
+
+      break;
+    }
+
+    buffer_length += (line_length + 1);
+
   }
-  return 1;
+
+  if(dir_file_write(buffer, buffer_length, "../assets", "rooms.csv") == 0)
+  {
+    if(buffer) free(buffer);
+
+    room_lines_free(&lines, count);
+
+    return 3;
+  }
+
+  if(buffer) free(buffer);
+
+  room_lines_free(&lines, count);
+
+  return 0;
 }
 
 /*
@@ -328,17 +422,24 @@ static room_t* name_room_get(room_t* rooms, size_t count, const char* name)
 /*
  *
  */
-static void address_and_port_store(char* address, int port, char* name)
+static room_t room_dup(const room_t room)
 {
-  room_t room;
+  room_t dup = { 0 };
 
-  room.name = strdup(name);
+  if(room.name)    dup.name = strdup(room.name);
 
-  room.address = strdup(address);
+  if(room.address) dup.address = strdup(room.address);
 
-  room.port = port;
+  dup.port = room.port;
 
+  return dup;
+}
 
+/*
+ *
+ */
+static int address_and_port_store(char* address, int port, char* name)
+{
   // 1. Get all registered rooms
   room_t* rooms;
   size_t  count;
@@ -348,7 +449,17 @@ static void address_and_port_store(char* address, int port, char* name)
     return 1;
   }
 
+  // 2. Create room to store
+  room_t room;
 
+  room.name = strdup(name);
+
+  room.address = strdup(address);
+
+  room.port = port;
+
+
+  // 3. 
   size_t index;
 
   for(index = 0; index < count; index++)
@@ -357,15 +468,16 @@ static void address_and_port_store(char* address, int port, char* name)
     {
       room_free(rooms + index);
 
-      rooms[index] = room;
+      rooms[index] = room_dup(room);
       
       break;
     }
   }
 
+  // 4. 
   if(index == count)
   {
-    rooms = realloc(sizeof(room_t) * (count + 1));
+    rooms = realloc(rooms, sizeof(room_t) * (count + 1));
 
     if(!rooms)
     {
@@ -374,12 +486,16 @@ static void address_and_port_store(char* address, int port, char* name)
       return 2;
     }
 
-    rooms[count] = room;
+    rooms[count] = room_dup(room);
 
     count++;
   }
 
+  room_free(&room);
+
   rooms_store(rooms, count);
+  
+  rooms_free(&rooms, count);
 
   return 0;
 }
