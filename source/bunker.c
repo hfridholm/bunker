@@ -13,6 +13,9 @@
 
 #include "file.h"
 
+extern char* getstr(const char* format, ...);
+
+
 static char doc[] = "bunker - a secure chat room";
 
 static char args_doc[] = "[INFO...]";
@@ -646,26 +649,49 @@ static void join_routine()
   char* address;
   int   port;
 
-  if(address_and_port_get(&address, &port, server) != 0)
+  if(address_and_port_get(&address, &port, server) == 0)
   {
-    printf("Address: %s\n", address);
-    printf("Port: %d\n", port);
+    printf("bunker: No room was found\n");
 
-    if(args.room)
-    {
-      printf("New name of room: %s\n", args.room);
+    return;
+  }
 
-      address_and_port_add(address, port, args.room);
-    }
+  printf("Address: %s\n", address);
+  printf("Port: %d\n", port);
 
-    free(address);
+  if(args.room)
+  {
+    printf("New name of room: %s\n", args.room);
+
+    address_and_port_add(address, port, args.room);
+  }
+
+  char* name;
+
+  if(args.name)
+  {
+    name = strdup(args.name);
   }
   else
   {
-    printf("bunker: No room was found\n");
+    name = getstr("Name: ");
   }
-}
 
+  if(!name)
+  {
+    fprintf(stderr, "Failed to input name\n");
+
+    name = strdup("Bob");
+  }
+
+  printf("Name: %s\n", name);
+
+  printf("Joining room...\n");
+
+  free(name);
+
+  free(address);
+}
 
 /*
  *
@@ -793,11 +819,6 @@ static struct argp argp = { options, opt_parse, args_doc, doc };
 int main(int argc, char* argv[])
 {
   argp_parse(&argp, argc, argv, 0, 0, &args);
-
-  if(args.name)
-  {
-    printf("Name: %s\n", args.name);
-  }
 
   if(args.arg_count > 0)
   {
