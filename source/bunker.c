@@ -68,6 +68,7 @@ static error_t opt_parse(int key, char* arg, struct argp_state* state)
       break;
 
     case ARGP_KEY_END:
+      if(args->arg_count < 1) argp_usage(state);
       break;
 
     default:
@@ -167,8 +168,6 @@ typedef struct
  */
 static int line_room_get(room_t* room, char* line)
 {
-  printf("Line: (%s)\n", line);
-
   char* token;
 
   if(!(token = strtok(line, ",")))
@@ -202,7 +201,7 @@ static int line_room_get(room_t* room, char* line)
  * - 0 | Success
  * - 1 | Fail
  */
-static int rooms_get(room_t** rooms, size_t* count)
+static int rooms_load(room_t** rooms, size_t* count)
 {
   if(!rooms || !count) return 1;
 
@@ -321,7 +320,7 @@ static void room_lines_free(char*** lines, size_t count)
 /*
  * 
  */
-static int rooms_store(room_t* rooms, size_t count)
+static int rooms_save(room_t* rooms, size_t count)
 {
   char** lines;
 
@@ -378,13 +377,27 @@ static int rooms_store(room_t* rooms, size_t count)
 /*
  *
  */
-static void room_free(room_t* room)
+static void room_free(room_t room)
 {
-  if(!room) return;
+  if(room.name)    free(room.name);
 
-  if(room->name) free(room->name);
+  if(room.address) free(room.address);
+}
 
-  if(room->address) free(room->address);
+/*
+ *
+ */
+static room_t room_create(const char* name, const char* address, int port)
+{
+  room_t room;
+
+  room.name = strdup(name);
+
+  room.address = strdup(address);
+
+  room.port = port;
+
+  return room;
 }
 
 /*
@@ -396,7 +409,7 @@ static void rooms_free(room_t** rooms, size_t count)
 
   for(size_t index = 0; index < count; index++)
   {
-    room_free(*rooms + index);
+    room_free((*rooms)[index]);
   }
 
   free(*rooms);
@@ -407,7 +420,7 @@ static void rooms_free(room_t** rooms, size_t count)
 /*
  *
  */
-static room_t* name_room_get(room_t* rooms, size_t count, const char* name)
+static room_t* room_get(room_t* rooms, size_t count, const char* name)
 {
   for(size_t index = 0; index < count; index++)
   {
@@ -438,62 +451,113 @@ static room_t room_dup(const room_t room)
 /*
  *
  */
-static int address_and_port_store(char* address, int port, char* name)
+static size_t room_index_get(room_t* rooms, size_t count, const char* name)
 {
-  // 1. Get all registered rooms
-  room_t* rooms;
-  size_t  count;
-
-  if(rooms_get(&rooms, &count) != 0)
-  {
-    return 1;
-  }
-
-  // 2. Create room to store
-  room_t room;
-
-  room.name = strdup(name);
-
-  room.address = strdup(address);
-
-  room.port = port;
-
-
-  // 3. 
   size_t index;
 
   for(index = 0; index < count; index++)
   {
-    if(strcmp(rooms[index].name, name) == 0)
-    {
-      room_free(rooms + index);
-
-      rooms[index] = room_dup(room);
-      
-      break;
-    }
+    if(strcmp(rooms[index].name, name) == 0) break;
   }
 
-  // 4. 
-  if(index == count)
-  {
-    rooms = realloc(rooms, sizeof(room_t) * (count + 1));
+  return index;
+}
 
-    if(!rooms)
+/*
+ *
+ */
+static int room_add(room_t** rooms, size_t* count, room_t room)
+{
+  if(!rooms || !count) return 1;
+
+  if(!(*rooms) && *count > 0) return 2;
+
+  // 3. 
+  size_t index = room_index_get(*rooms, *count, room.name);
+
+  if(index < *count)
+  {
+    // Free the previous room
+    room_free((*rooms)[index]);
+
+    // Allocate the new room
+    (*rooms)[index] = room_dup(room);
+  }
+  else
+  {
+    // Allocate new memory for the new room
+    *rooms = realloc(*rooms, sizeof(room_t) * (*count + 1));
+
+    if(!(*rooms))
     {
       printf("Failed to realloc rooms\n");
 
       return 2;
     }
 
-    rooms[count] = room_dup(room);
+    (*rooms)[*count] = room_dup(room);
 
-    count++;
+    (*count)++;
   }
 
-  room_free(&room);
+  return 0;
+}
 
-  rooms_store(rooms, count);
+/*
+ *
+ */
+static int room_del(room_t** rooms, size_t* count, const char* name)
+{
+  if(!rooms || !count || !name) return 1;
+
+  if(!(*rooms) || *count == 0) return 2;
+
+  size_t room_index = room_index_get(*rooms, *count, name);
+
+  if(room_index == *count)
+  {
+    return 2;
+  }
+
+  room_free((*rooms)[room_index]);
+
+
+  for(size_t index = room_index; index < (*count - 1); index++)
+  {
+    (*rooms)[index] = (*rooms)[index + 1];
+  }
+
+  *rooms = realloc(*rooms, sizeof(room_t) * (*count - 1));
+
+  (*count)--;
+
+  return 0;
+}
+
+/*
+ *
+ */
+static int address_and_port_add(char* address, int port, char* name)
+{
+  // 1. Get all registered rooms
+  room_t* rooms;
+  size_t  count;
+
+  if(rooms_load(&rooms, &count) != 0)
+  {
+    return 1;
+  }
+
+  // 2. Create room to store
+  room_t room = room_create(name, address, port);
+
+
+  room_add(&rooms, &count, room);
+
+
+  room_free(room);
+
+  rooms_save(rooms, count);
   
   rooms_free(&rooms, count);
 
@@ -513,13 +577,13 @@ static int address_and_port_lookup(char** address, int* port, const char* string
   room_t* rooms;
   size_t  count;
 
-  if(rooms_get(&rooms, &count) != 0)
+  if(rooms_load(&rooms, &count) != 0)
   {
     return 1;
   }
 
   // Try to get room with matching name
-  room_t* room = name_room_get(rooms, count, string);
+  room_t* room = room_get(rooms, count, string);
 
   if(!room)
   {
@@ -564,6 +628,163 @@ static int address_and_port_get(char** address, int* port, const char* string)
   else return 0;
 }
 
+/*
+ *
+ */
+static void join_routine()
+{
+  if(args.arg_count < 2)
+  {
+    printf("No room inputted\n");
+    return;
+  }
+
+  char* server = args.args[1];
+
+  printf("Room: %s\n", server);
+
+  char* address;
+  int   port;
+
+  if(address_and_port_get(&address, &port, server) != 0)
+  {
+    printf("Address: %s\n", address);
+    printf("Port: %d\n", port);
+
+    if(args.room)
+    {
+      printf("New name of room: %s\n", args.room);
+
+      address_and_port_add(address, port, args.room);
+    }
+
+    free(address);
+  }
+  else
+  {
+    printf("bunker: No room was found\n");
+  }
+}
+
+
+/*
+ *
+ */
+static void list_routine()
+{
+  // 1. Get all registered rooms
+  room_t* rooms;
+  size_t  count;
+
+  if(rooms_load(&rooms, &count) != 0)
+  {
+    return;
+  }
+
+  for(size_t index = 0; index < count; index++)
+  {
+    room_t room = rooms[index];
+
+    printf("%s : %s:%d\n", room.name, room.address, room.port);
+  }
+
+  rooms_free(&rooms, count);
+}
+
+/*
+ *
+ */
+static void add_routine()
+{
+  if(args.arg_count < 3)
+  {
+    fprintf(stderr, "Not enough arguments\n");
+
+    return;
+  }
+
+  char* server = args.args[2];
+
+  char* address;
+  int   port;
+
+  if(address_and_port_get(&address, &port, server) == 0)
+  {
+    fprintf(stderr, "Failed to parse address and port\n");
+
+    return;
+  }
+
+  printf("Address: %s\n", address);
+  printf("Port: %d\n", port);
+
+  // 2. Create room to store
+  room_t room = room_create(args.args[1], address, port);
+
+  free(address);
+
+
+  // 1. Get all registered rooms
+  room_t* rooms;
+  size_t  count;
+
+  if(rooms_load(&rooms, &count) != 0)
+  {
+    return;
+  }
+
+  room_add(&rooms, &count, room);
+
+
+  room_free(room);
+
+  rooms_save(rooms, count);
+  
+  rooms_free(&rooms, count);
+}
+
+/*
+ *
+ */
+static void del_routine()
+{
+  if(args.arg_count < 2)
+  {
+    printf("No room inputted\n");
+    return;
+  }
+
+  char* room = args.args[1];
+
+  // 1. Get all registered rooms
+  room_t* rooms;
+  size_t  count;
+
+  if(rooms_load(&rooms, &count) != 0)
+  {
+    return;
+  }
+
+  printf("count before: %ld\n", count);
+
+  if(room_del(&rooms, &count, room) != 0)
+  {
+    rooms_free(&rooms, count);
+
+    fprintf(stderr, "Failed to del room\n");
+
+    return;
+  }
+
+  printf("count after: %ld\n", count);
+
+  printf("Deleted room: %s\n", room);
+
+  rooms_save(rooms, count);
+  
+  rooms_free(&rooms, count);
+}
+
 static struct argp argp = { options, opt_parse, args_doc, doc };
 
 /*
@@ -580,28 +801,27 @@ int main(int argc, char* argv[])
 
   if(args.arg_count > 0)
   {
-    printf("Room: %s\n", args.args[0]);
+    char* command = args.args[0];
 
-    char* address;
-    int   port;
-
-    if(address_and_port_get(&address, &port, args.args[0]) != 0)
+    if(strcmp(command, "join") == 0)
     {
-      printf("Address: %s\n", address);
-      printf("Port: %d\n", port);
-
-      if(args.room)
-      {
-        printf("New name of room: %s\n", args.room);
-
-        address_and_port_store(address, port, args.room);
-      }
-
-      free(address);
+      join_routine();
+    }
+    else if(strcmp(command, "list") == 0)
+    {
+      list_routine();
+    }
+    else if(strcmp(command, "del") == 0)
+    {
+      del_routine();
+    }
+    else if(strcmp(command, "add") == 0)
+    {
+      add_routine();
     }
     else
     {
-      printf("bunker: No room was found\n");
+      printf("This is a bunker\n");
     }
   }
 
