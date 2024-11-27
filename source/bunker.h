@@ -10,8 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdbool.h>
 
 #include "file.h"
+#include "socket.h"
 
 typedef struct
 {

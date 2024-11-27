@@ -14,8 +14,9 @@ static char args_doc[] = "[INFO...]";
 
 static struct argp_option options[] =
 {
-  { "name", 'n', "NAME", 0, "Your nickname in the room" },
-  { "room", 'r', "ROOM", 0, "New name of chat room" },
+  { "name",  'n', "NAME", 0, "Your nickname in the room" },
+  { "room",  'r', "ROOM", 0, "New name of chat room" },
+  { "debug", 'd', 0,      0, "Show debug messages" },
   { 0 }
 };
 
@@ -25,6 +26,7 @@ struct args
   size_t arg_count;
   char*  name;
   char*  room;
+  bool   debug;
 };
 
 struct args args =
@@ -32,7 +34,8 @@ struct args args =
   .args      = NULL,
   .arg_count = 0,
   .name      = NULL,
-  .room      = NULL
+  .room      = NULL,
+  .debug     = false
 };
 
 /*
@@ -50,6 +53,10 @@ static error_t opt_parse(int key, char* arg, struct argp_state* state)
 
     case 'r':
       args->room = arg;
+      break;
+
+    case 'd':
+      args->debug = true;
       break;
 
     case ARGP_KEY_ARG:
@@ -94,7 +101,12 @@ static void recv_routine()
  */
 static void room_routine(const char* address, int port, const char* room)
 {
+  int sockfd = client_socket_create(address, port, args.debug);
+
   printf("Joining: (%s:%d)\n", address, port);
+
+  socket_close(&sockfd, args.debug);
+
 
   if(room) printf("Room: (%s)\n", room);
 
