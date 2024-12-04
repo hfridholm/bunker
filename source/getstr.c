@@ -1,13 +1,20 @@
 /*
- * getstr.c
+ * getstr.c - get string from stdin
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2024-11-26
+ * Last updated: 2024-12-04
+ *
+ *
+ * These are the available functions:
+ *
+ * char* getstr(const char* format, ...)
+ *
+ *
+ * Uses va_list for argument parsing, like in debug.c
  */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -73,10 +80,8 @@ static int specifier_append(char* buffer, const char* specifier, va_list args)
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static int arg_append(char* buffer, const char* format, int* f_index, va_list args)
+static int arg_append(char* buffer, const char* format, int f_length, int* f_index, va_list args)
 {
-  const size_t f_length = strlen(format);
-
   char specifier[f_length + 1];
 
   for(int s_index = 0; (*f_index)++ < f_length; s_index++)
@@ -111,16 +116,13 @@ static int prompt_create(char* prompt, const char* format, va_list args)
   {
     if(format[f_index] == '%')
     {
-      int amount = arg_append(prompt + p_index, format, &f_index, args);
+      int amount = arg_append(prompt + p_index, format, f_length, &f_index, args);
 
       if(amount < 0) return -1;
 
       p_index += amount;
     }
-    else
-    {
-      prompt[p_index++] = format[f_index];
-    }
+    else prompt[p_index++] = format[f_index];
   }
 
   prompt[p_index] = '\0';
@@ -129,13 +131,20 @@ static int prompt_create(char* prompt, const char* format, va_list args)
 }
 
 /*
- * getstr - Get string from stdin
+ * getstr - get string from stdin
+ *
+ * The following takes place:
+ * 1. The prompt is printed to stdout
+ * 2. The user inputs from stdin
  *
  * RETURN (char* string)
+ * - NULL | An error occured
+ *
+ * Maybe: Assign errno a suitable value
  */
 char* getstr(const char* format, ...)
 {
-  // 2. Output the prompt to stdout
+  // 1. Create prompt
   va_list args;
 
   va_start(args, format);
@@ -151,6 +160,8 @@ char* getstr(const char* format, ...)
 
   va_end(args);
 
+
+  // 2. Output the prompt to stdout
   if(fprintf(stdout, "%s", prompt) < 0)
   {
     return NULL;
@@ -158,7 +169,7 @@ char* getstr(const char* format, ...)
 
 
   // 3. Input string from stdin
-  char buffer[256];
+  char buffer[1024];
 
   if(fgets(buffer, sizeof(buffer), stdin) == NULL)
   {
@@ -169,4 +180,3 @@ char* getstr(const char* format, ...)
 
   return strdup(buffer);
 }
-

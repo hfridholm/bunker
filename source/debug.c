@@ -1,31 +1,58 @@
 /*
+ * debug.c - functions for outputing debug messages
+ *
  * Written by Hampus Fridholm
  *
- * Last updated: 2024-09-08
+ * Last updated: 2024-12-04
+ *
+ *
+ * These are the available funtions:
+ *
+ * int debug_print(FILE* stream, const char* title, const char* format, ...)
+ *
+ * int error_print(const char* format, ...)
+ *
+ * int info_print(const char* format, ...)
+ *
+ *
+ * Uses va_list for argument parsing, like in getstr.c
  */
 
-#include "debug.h"
+#include <stdio.h>
+#include <stdarg.h>
+#include <string.h>
+
+#include <sys/time.h>
+#include <time.h>
 
 /*
- * Format string of current time in timezone with hours, minuts, seconds and ms
+ * The debug format must include:
+ * - %s for the time string
+ * - %s for the title
+ * - %s for the message
+ * - \n for new-line
+ */
+#define DEBUG_FORMAT "[%s] [ %s ]: %s\n"
+
+/*
+ * Format string of current time
  *
  * PARAMS
- * - char* buffer              | Buffer to store format string
- * - struct timezone* timezone | Timezone
+ * - char* buffer | Buffer to store time string
  *
  * RETURN (char* buffer)
  * - NULL | Failed to get time of day
  */
-static char* time_format_string(char* buffer, struct timezone* timezone)
+static char* timestr_create(char* buffer)
 {
   struct timeval timeval;
-  if(gettimeofday(&timeval, timezone) == -1) return NULL;
+  if(gettimeofday(&timeval, NULL) == -1) return NULL;
 
   struct tm* timeinfo = localtime(&timeval.tv_sec);
 
   strftime(buffer, 10, "%H:%M:%S", timeinfo);
 
-  sprintf(buffer + 8, ".%03ld", timeval.tv_usec / 1000);
+  sprintf(buffer + 8, ".%ld", timeval.tv_usec / 10000);
 
   return buffer;
 }
@@ -38,45 +65,45 @@ static char* time_format_string(char* buffer, struct timezone* timezone)
  * - const char* specifier | Argument format specifier
  * - va_list args          | va_list argument list
  *
- * RETURN (same as sprintf)
+ * RETURN (int amount, same as sprintf)
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static int format_specifier_arg_append(char* buffer, const char* specifier, va_list args)
+static int specifier_append(char* buffer, const char* specifier, va_list args)
 {
-  if(!strncmp(specifier, "d", 1))
+  if(strncmp(specifier, "d", 1) == 0)
   {
     int arg = va_arg(args, int);
 
     return sprintf(buffer, "%d", arg);
   }
-  else if(!strncmp(specifier, "ld", 2))
+  else if(strncmp(specifier, "ld", 2) == 0)
   {
     long int arg = va_arg(args, long int);
 
     return sprintf(buffer, "%ld", arg);
   }
-  else if(!strncmp(specifier, "lld", 2))
+  else if(strncmp(specifier, "lld", 2) == 0)
   {
     long long int arg = va_arg(args, long long int);
 
     return sprintf(buffer, "%lld", arg);
   }
-  else if(!strncmp(specifier, "c", 1))
+  else if(strncmp(specifier, "c", 1) == 0)
   {
     // ‘char’ is promoted to ‘int’ when passed through ‘...’
     int arg = va_arg(args, int);
 
     return sprintf(buffer, "%c", arg);
   }
-  else if(!strncmp(specifier, "f", 1))
+  else if(strncmp(specifier, "f", 1) == 0)
   {
     // ‘float’ is promoted to ‘double’ when passed through ‘...’
     double arg = va_arg(args, double);
 
     return sprintf(buffer, "%lf", arg);
   }
-  else if(!strncmp(specifier, "s", 1))
+  else if(strncmp(specifier, "s", 1) == 0)
   {
     const char* arg = va_arg(args, const char*);
 
@@ -86,29 +113,26 @@ static int format_specifier_arg_append(char* buffer, const char* specifier, va_l
 }
 
 /*
- * Part of function format_args_string
  * Formats just a single format specifier argument from va_list
  *
- * RETURN (same as sprintf)
+ * RETURN (int amount, same as sprintf)
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static int format_arg_append(char* buffer, const char* format, int* f_index, va_list args)
+static int arg_append(char* buffer, const char* format, int f_length, int* f_index, va_list args)
 {
-  const size_t f_length = strlen(format);
-
   char specifier[f_length + 1];
 
   for(int s_index = 0; (*f_index)++ < f_length; s_index++)
   {
-    specifier[s_index]     = format[*f_index];
+    specifier[s_index] = format[*f_index];
     specifier[s_index + 1] = '\0';
 
-    int status = format_specifier_arg_append(buffer, specifier, args);
+    int amount = specifier_append(buffer, specifier, args);
 
     // If a valid format specifier has been found and parsed,
     // return the status of the appended specifier
-    if(status > 0) return status;
+    if(amount > 0) return amount;
   }
 
   return -1;
@@ -121,76 +145,58 @@ static int format_arg_append(char* buffer, const char* format, int* f_index, va_
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static int format_args_string(char* buffer, const char* format, va_list args)
+static int string_create(char* string, const char* format, va_list args)
 {
   const size_t f_length = strlen(format);
 
-  int b_index = 0;
+  int s_index = 0;
 
   for(int f_index = 0; f_index < f_length; f_index++)
   {
     if(format[f_index] == '%')
     {
-      int status = format_arg_append(buffer + b_index, format, &f_index, args);
+      int amount = arg_append(string + s_index, format, f_length, &f_index, args);
 
-      // If failed to append format argument, return error
-      if(status < 0) return -1;
+      if(amount < 0) return -1;
 
-      b_index = strlen(buffer);
+      s_index += amount;
     }
-    else buffer[b_index++] = format[f_index];
+    else string[s_index++] = format[f_index];
   }
 
-  return strlen(buffer);
+  string[s_index] = '\0';
+
+  return s_index;
 }
 
 /*
- * fprintf, but with va_list as arguments and time with title
+ * Print custom debug message, taking in va_list
  *
  * RETURN (same as fprintf)
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static int debug_args_print(FILE* stream, const char* title, const char* format, va_list args)
+static int valist_print(FILE* stream, const char* title, const char* format, va_list args)
 {
-  char time_string[32];
-  memset(time_string, '\0', sizeof(time_string));
+  char timestr[32];
 
-  time_format_string(time_string, NULL);
+  if(timestr_create(timestr) == NULL)
+  {
+    return -1;
+  }
 
-  char buffer[1024];
-  memset(buffer, '\0', sizeof(buffer));
+  char string[1024];
 
-  int status = format_args_string(buffer, format, args);
+  if(string_create(string, format, args) < 0)
+  {
+    return -1;
+  }
 
-  // If failed to create format string, return error
-  if(status < 0) return -1;
-
-  return fprintf(stream, "[%s] [ %s ]: %s\n", time_string, title, buffer);
+  return fprintf(stream, DEBUG_FORMAT, timestr, title, string);
 }
 
 /*
- * sprintf - my own implementation
- *
- * RETURN (same as sprintf)
- * - >=0 | Number of printed characters
- * -  -1 | Format specifier does not exist, or sprintf error
- */
-int format_string(char* buffer, const char* format, ...)
-{
-  va_list args;
-
-  va_start(args, format);
-
-  int status = format_args_string(buffer, format, args);
-
-  va_end(args);
-
-  return status;
-}
-
-/*
- * fprintf, but with time and title
+ * Print own debug message to specified stream
  *
  * RETURN (same as fprintf)
  * - >=0 | Number of printed characters
@@ -202,15 +208,15 @@ int debug_print(FILE* stream, const char* title, const char* format, ...)
 
   va_start(args, format);
 
-  int status = debug_args_print(stream, title, format, args);
+  int amount = valist_print(stream, title, format, args);
 
   va_end(args);
 
-  return status;
+  return amount;
 }
 
 /*
- * fprintf to stderr, but with time and "ERROR" title
+ * Print debug error message to stderr
  *
  * RETURN (same as fprintf)
  * - >=0 | Number of printed characters
@@ -222,15 +228,15 @@ int error_print(const char* format, ...)
 
   va_start(args, format);
 
-  int status = debug_args_print(stderr, "\e[1;31mERROR\e[0m", format, args);
+  int amount = valist_print(stderr, "\e[1;31mERROR\e[0m", format, args);
 
   va_end(args);
 
-  return status;
+  return amount;
 }
 
 /*
- * fprintf to stdout, but with time and "INFO" title
+ * Print debug info message to stdout
  *
  * RETURN (same as fprintf)
  * - >=0 | Number of printed characters
@@ -242,9 +248,9 @@ int info_print(const char* format, ...)
 
   va_start(args, format);
 
-  int status = debug_args_print(stdout, "\e[1;37mINFO \e[0m", format, args);
+  int amount = valist_print(stdout, "\e[1;37mINFO \e[0m", format, args);
 
   va_end(args);
 
-  return status;
+  return amount;
 }
