@@ -6,6 +6,9 @@
  * Last updated: 2024-11-25
  */
 
+#define DEBUG_IMPLEMENT
+#include "debug.h"
+
 #include "bunker.h"
 
 static char doc[] = "bunker - a secure chat room";

@@ -11,7 +11,7 @@
  * char* getstr(const char* format, ...)
  *
  *
- * Uses va_list for argument parsing, like in debug.c
+ * Uses va_list for argument parsing, like in debug.h
  */
 
 #include <stdio.h>

@@ -4,6 +4,8 @@
  * Last updated: 2024-11-27
  */
 
+#include "debug.h"
+
 #include "socket.h"
 
 /*

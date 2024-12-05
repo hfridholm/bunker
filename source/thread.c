@@ -4,6 +4,8 @@
  * Last updated: 2024-09-07
  */
 
+#include "debug.h"
+
 #include "thread.h"
 
 /*

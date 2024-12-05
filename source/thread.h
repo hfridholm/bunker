@@ -7,8 +7,6 @@
 #ifndef THREAD_H
 #define THREAD_H
 
-#include "debug.h"
-
 #include <pthread.h>
 #include <stdbool.h>
 #include <signal.h>
