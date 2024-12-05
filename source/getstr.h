@@ -1,9 +1,12 @@
 /*
- * getstr.c - get string from stdin
+ * getstr.h - get string from stdin
  *
  * Written by Hampus Fridholm
  *
- * Last updated: 2024-12-04
+ * Last updated: 2024-12-05
+ *
+ *
+ * In main compilation unit; define GETSTR_IMPLEMENT
  *
  *
  * These are the available functions:
@@ -13,6 +16,26 @@
  *
  * Uses va_list for argument parsing, like in debug.h
  */
+
+/*
+ * From here on, until GETSTR_IMPLEMENT,
+ * it is like a normal header file with declarations
+ */
+
+#ifndef GETSTR_H
+#define GETSTR_H
+
+extern char* getstr(const char* format, ...);
+
+#endif // GETSTR_H
+
+/*
+ * This header library file uses _IMPLEMENT guards
+ *
+ * If GETSTR_IMPLEMENT is defined, the definitions will be included
+ */
+
+#ifdef GETSTR_IMPLEMENT
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -30,7 +53,7 @@
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static int specifier_append(char* buffer, const char* specifier, va_list args)
+static inline int gstr_specifier_append(char* buffer, const char* specifier, va_list args)
 {
   if(strncmp(specifier, "d", 1) == 0)
   {
@@ -80,7 +103,7 @@ static int specifier_append(char* buffer, const char* specifier, va_list args)
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static int arg_append(char* buffer, const char* format, int f_length, int* f_index, va_list args)
+static inline int gstr_arg_append(char* buffer, const char* format, int f_length, int* f_index, va_list args)
 {
   char specifier[f_length + 1];
 
@@ -89,7 +112,7 @@ static int arg_append(char* buffer, const char* format, int f_length, int* f_ind
     specifier[s_index] = format[*f_index];
     specifier[s_index + 1] = '\0';
 
-    int amount = specifier_append(buffer, specifier, args);
+    int amount = gstr_specifier_append(buffer, specifier, args);
 
     // If a valid format specifier has been found and parsed,
     // return the status of the appended specifier
@@ -106,7 +129,7 @@ static int arg_append(char* buffer, const char* format, int f_length, int* f_ind
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static int prompt_create(char* prompt, const char* format, va_list args)
+static inline int gstr_prompt_create(char* prompt, const char* format, va_list args)
 {
   const size_t f_length = strlen(format);
 
@@ -116,7 +139,7 @@ static int prompt_create(char* prompt, const char* format, va_list args)
   {
     if(format[f_index] == '%')
     {
-      int amount = arg_append(prompt + p_index, format, f_length, &f_index, args);
+      int amount = gstr_arg_append(prompt + p_index, format, f_length, &f_index, args);
 
       if(amount < 0) return -1;
 
@@ -151,7 +174,7 @@ char* getstr(const char* format, ...)
 
   char prompt[1024];
 
-  if(prompt_create(prompt, format, args) == -1)
+  if(gstr_prompt_create(prompt, format, args) == -1)
   {
     va_end(args);
 
@@ -180,3 +203,5 @@ char* getstr(const char* format, ...)
 
   return strdup(buffer);
 }
+
+#endif // GETSTR_IMPLEMENT

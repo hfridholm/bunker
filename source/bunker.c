@@ -9,6 +9,9 @@
 #define DEBUG_IMPLEMENT
 #include "debug.h"
 
+#define GETSTR_IMPLEMENT
+#include "getstr.h"
+
 #include "bunker.h"
 
 static char doc[] = "bunker - a secure chat room";

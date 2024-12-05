@@ -71,7 +71,7 @@ extern int info_print(const char* format, ...);
  * RETURN (char* buffer)
  * - NULL | Failed to get time of day
  */
-static inline char* timestr_create(char* buffer)
+static inline char* dbg_timestr_create(char* buffer)
 {
   struct timeval timeval;
   if(gettimeofday(&timeval, NULL) == -1) return NULL;
@@ -97,7 +97,7 @@ static inline char* timestr_create(char* buffer)
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static inline int specifier_append(char* buffer, const char* specifier, va_list args)
+static inline int dbg_specifier_append(char* buffer, const char* specifier, va_list args)
 {
   if(strncmp(specifier, "d", 1) == 0)
   {
@@ -147,7 +147,7 @@ static inline int specifier_append(char* buffer, const char* specifier, va_list 
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static inline int arg_append(char* buffer, const char* format, int f_length, int* f_index, va_list args)
+static inline int dbg_arg_append(char* buffer, const char* format, int f_length, int* f_index, va_list args)
 {
   char specifier[f_length + 1];
 
@@ -156,7 +156,7 @@ static inline int arg_append(char* buffer, const char* format, int f_length, int
     specifier[s_index] = format[*f_index];
     specifier[s_index + 1] = '\0';
 
-    int amount = specifier_append(buffer, specifier, args);
+    int amount = dbg_specifier_append(buffer, specifier, args);
 
     // If a valid format specifier has been found and parsed,
     // return the status of the appended specifier
@@ -173,7 +173,7 @@ static inline int arg_append(char* buffer, const char* format, int f_length, int
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static inline int string_create(char* string, const char* format, va_list args)
+static inline int dbg_string_create(char* string, const char* format, va_list args)
 {
   const size_t f_length = strlen(format);
 
@@ -183,7 +183,7 @@ static inline int string_create(char* string, const char* format, va_list args)
   {
     if(format[f_index] == '%')
     {
-      int amount = arg_append(string + s_index, format, f_length, &f_index, args);
+      int amount = dbg_arg_append(string + s_index, format, f_length, &f_index, args);
 
       if(amount < 0) return -1;
 
@@ -204,18 +204,18 @@ static inline int string_create(char* string, const char* format, va_list args)
  * - >=0 | Number of printed characters
  * -  -1 | Format specifier does not exist, or sprintf error
  */
-static inline int valist_print(FILE* stream, const char* title, const char* format, va_list args)
+static inline int dbg_valist_print(FILE* stream, const char* title, const char* format, va_list args)
 {
   char timestr[32];
 
-  if(timestr_create(timestr) == NULL)
+  if(dbg_timestr_create(timestr) == NULL)
   {
     return -1;
   }
 
   char string[1024];
 
-  if(string_create(string, format, args) < 0)
+  if(dbg_string_create(string, format, args) < 0)
   {
     return -1;
   }
@@ -236,7 +236,7 @@ int debug_print(FILE* stream, const char* title, const char* format, ...)
 
   va_start(args, format);
 
-  int amount = valist_print(stream, title, format, args);
+  int amount = dbg_valist_print(stream, title, format, args);
 
   va_end(args);
 
@@ -256,7 +256,7 @@ int error_print(const char* format, ...)
 
   va_start(args, format);
 
-  int amount = valist_print(stderr, "\e[1;31mERROR\e[0m", format, args);
+  int amount = dbg_valist_print(stderr, "\e[1;31mERROR\e[0m", format, args);
 
   va_end(args);
 
@@ -276,7 +276,7 @@ int info_print(const char* format, ...)
 
   va_start(args, format);
 
-  int amount = valist_print(stdout, "\e[1;37mINFO \e[0m", format, args);
+  int amount = dbg_valist_print(stdout, "\e[1;37mINFO \e[0m", format, args);
 
   va_end(args);
 

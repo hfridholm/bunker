@@ -22,9 +22,6 @@ typedef struct
   int   port;
 } room_t;
 
-extern char* getstr(const char* format, ...);
-
-
 extern int address_and_port_split(char** address, int* port, const char* string);
 
 extern int address_and_port_add(char* address, int port, char* name);
