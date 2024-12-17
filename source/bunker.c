@@ -343,6 +343,10 @@ int main(int argc, char* argv[])
 
   srand(time(NULL));
 
+  debug_file_open("output.txt");
+
+  info_print("Start main");
+
 
   char* command = args.args[0];
 
@@ -366,6 +370,11 @@ int main(int argc, char* argv[])
   {
     printf("bunker: Unknown command '%s'\n", command);
   }
+
+  
+  info_print("Stop main");
+
+  debug_file_close();
 
   free(args.args);
 
